@@ -1,0 +1,59 @@
+TRIVIAL DRIVE - SAMPLE FOR IN-APP BILLING VERSION 3
+Copyright (c) 2012 Google Inc. All rights reserved.
+Bruno Oliveira, 2012-11-29
+
+This sample can't be run as-is. You have to create your own
+application instance in the Developer Console and modify this
+sample to point to it. Here is what you must do:
+
+ON THE GOOGLE PLAY DEVELOPER CONSOLE:
+1. Create an application on the Developer Console. You must use
+   version 2, available at https://play.google.com/apps/publish/v2/
+   or later. In-app billing version 3 is not available in the older
+   versions of Developer Console.
+
+2. In that app, create MANAGED in-app items with these IDs:
+     premium, gas
+   Set their prices to 1 dollar (or any other price you like,
+   but make it a small price since this is just for testing purposes).
+
+3. Make sure your test account (the one you will use to test purchases)
+   is correctly listed in the "testing" section. Your test account CANNOT
+   BE THE SAME AS THE PUBLISHER ACCOUNT. If it is, purchases won't go
+   through.
+
+4. Grab the application's public key (a base-64 string) -- you will need
+   that next. Note that this is the *application's* public key, not the
+   developer public key. You can find the application's public key in
+   the "Services & API" page for your application.
+
+IN THE CODE
+5. Open MainActivity.java and replace the placeholder key with your app's public key.
+6. Change the sample's package name to your package name
+   (you can do that using your favorite IDE's refactoring feature, or manually
+   by changing the code directories and package declarations in .java files)
+7. Don't forget to update the package name in AndroidManifest.xml. Many refactoring
+   tools fail to do that automatically!
+8. Make sure that AndroidManifest.xml lists the updated package name!
+9. Export an APK, signing it with your PRODUCTION (not debug) developer certificate
+
+BACK TO GOOGLE PLAY DEVELOPER CONSOLE
+10. Upload your APK to Google Play
+11. Wait 2-3 hours for Google Play to process the APK (if you don't, you might
+    see errors where Google Play says that "this version of the application
+    is not enabled for in-app billing" or something similar)
+    
+TEST THE CODE
+12. Install the APK, signed with your PRODUCTION certificate, to a test device [*] 
+13. Run the app
+14. Make purchases (make sure you're purchasing with an account that's NOT
+    your developer account with which you uploaded the app to Google Play).
+
+Remember to refund any real purchases you make, if you don't want the 
+charges to actually to through.
+
+[*]: it will be easier to use a test device that doesn't have your
+developer account logged in; this is because, if you attempt to purchase
+an in-app item using the same account that you used to publish the app,
+the purchase will not go through.
+
