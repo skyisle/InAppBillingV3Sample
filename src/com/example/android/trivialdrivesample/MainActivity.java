@@ -234,6 +234,13 @@ public class MainActivity extends Activity {
         public void onIabPurchaseFinished(IabResult result, Purchase purchase) {
             Log.d(TAG, "Purchase finished: " + result + ", purchase: " + purchase);
             if (result.isFailure()) {
+                if (result.getResponse() == IabHelper.BILLING_RESPONSE_RESULT_ITEM_ALREADY_OWNED) {
+                    Log.d(TAG, "already purchased item.");
+                    mIsPremium = true;
+                    updateUi();
+                    setWaitScreen(false);
+                    return;
+                }
                 // Oh noes!
                 complain("Error purchasing: " + result);
                 setWaitScreen(false);
@@ -299,6 +306,7 @@ public class MainActivity extends Activity {
     // We're being destroyed. It's important to dispose of the helper here!
     @Override
     public void onDestroy() {
+        super.onDestroy();
         // very important:
         Log.d(TAG, "Destroying helper.");
         if (mHelper != null) mHelper.dispose();
