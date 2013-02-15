@@ -23,7 +23,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
-import com.example.android.trivialdrivesample.R;
+
 import com.example.android.trivialdrivesample.util.IabHelper;
 import com.example.android.trivialdrivesample.util.IabResult;
 import com.example.android.trivialdrivesample.util.Inventory;
@@ -37,7 +37,7 @@ import com.example.android.trivialdrivesample.util.Purchase;
  * contains important information on how to set up this project.
  * 
  * All the game-specific logic is implemented here in MainActivity, while the 
- * general-purpose boilerplate that can be reused in any game is provided in the 
+ * general-purpose boilerplate that can be reused in any app is provided in the 
  * classes in the util/ subdirectory. When implementing your own application,
  * you can copy over util/*.java to make use of those utility classes.  
  * 
@@ -48,6 +48,9 @@ import com.example.android.trivialdrivesample.util.Purchase;
  *
  * The user can also purchase a "premium upgrade" that gives them a red car
  * instead of the standard blue one (exciting!).
+ * 
+ * The user can also purchase a subscription ("infinite gas") that allows them
+ * to drive without using up any gas while that subscription is active.
  *
  * It's important to note the consumption mechanics for each item.
  *
@@ -55,6 +58,8 @@ import com.example.android.trivialdrivesample.util.Purchase;
  * purchase, the player will always own that item. The application knows to
  * display the red car instead of the blue one because it queries whether
  * the premium "item" is owned or not.
+ * 
+ * INFINITE GAS: this is a subscription, and subscriptions can't be consumed.
  *
  * GAS: when gas is purchased, the "gas" item is then owned. We consume it
  * when we apply that item's effects to our app's world, which to us means
@@ -84,10 +89,16 @@ public class MainActivity extends Activity {
 
     // Does the user have the premium upgrade?
     boolean mIsPremium = false;
+    
+    // Does the user have an active subscription to the infinite gas plan?
+    boolean mSubscribedToInfiniteGas = false;
 
-    // SKUs for our two products: the premium upgrade (non-consumable) and gas (consumable)
+    // SKUs for our products: the premium upgrade (non-consumable) and gas (consumable)
     static final String SKU_PREMIUM = "premium";
     static final String SKU_GAS = "gas";
+    
+    // SKU for our subscription (infinite gas)
+    static final String SKU_INFINITE_GAS = "infinite_gas";
 
     // (arbitrary) request code for the purchase flow
     static final int RC_REQUEST = 10001;
@@ -162,7 +173,7 @@ public class MainActivity extends Activity {
         });
     }
 
-    // Listener that's called when we finish querying the items we own
+    // Listener that's called when we finish querying the items and subscriptions we own
     IabHelper.QueryInventoryFinishedListener mGotInventoryListener = new IabHelper.QueryInventoryFinishedListener() {
         public void onQueryInventoryFinished(IabResult result, Inventory inventory) {
             Log.d(TAG, "Query inventory finished.");
@@ -172,13 +183,29 @@ public class MainActivity extends Activity {
             }
 
             Log.d(TAG, "Query inventory was successful.");
-
+            
+            /*
+             * Check for items we own. Notice that for each purchase, we check
+             * the developer payload to see if it's correct! See
+             * verifyDeveloperPayload().
+             */
+            
             // Do we have the premium upgrade?
-            mIsPremium = inventory.hasPurchase(SKU_PREMIUM);
+            Purchase premiumPurchase = inventory.getPurchase(SKU_PREMIUM);
+            mIsPremium = (premiumPurchase != null && verifyDeveloperPayload(premiumPurchase));
             Log.d(TAG, "User is " + (mIsPremium ? "PREMIUM" : "NOT PREMIUM"));
+            
+            // Do we have the infinite gas plan?
+            Purchase infiniteGasPurchase = inventory.getPurchase(SKU_INFINITE_GAS);
+            mSubscribedToInfiniteGas = (infiniteGasPurchase != null && 
+                    verifyDeveloperPayload(infiniteGasPurchase));
+            Log.d(TAG, "User " + (mSubscribedToInfiniteGas ? "HAS" : "DOES NOT HAVE") 
+                        + " infinite gas subscription.");
+            if (mSubscribedToInfiniteGas) mTank = TANK_MAX;
 
             // Check for gas delivery -- if we own gas, we should fill up the tank immediately
-            if (inventory.hasPurchase(SKU_GAS)) {
+            Purchase gasPurchase = inventory.getPurchase(SKU_GAS);
+            if (gasPurchase != null && verifyDeveloperPayload(gasPurchase)) {
                 Log.d(TAG, "We have gas. Consuming it.");
                 mHelper.consumeAsync(inventory.getPurchase(SKU_GAS), mConsumeFinishedListener);
                 return;
@@ -194,6 +221,11 @@ public class MainActivity extends Activity {
     public void onBuyGasButtonClicked(View arg0) {
         Log.d(TAG, "Buy gas button clicked.");
 
+        if (mSubscribedToInfiniteGas) {
+            complain("No need! You're subscribed to infinite gas. Isn't that awesome?");
+            return;
+        }
+        
         if (mTank >= TANK_MAX) {
             complain("Your tank is full. Drive around a bit!");
             return;
@@ -203,16 +235,50 @@ public class MainActivity extends Activity {
         // We will be notified of completion via mPurchaseFinishedListener
         setWaitScreen(true);
         Log.d(TAG, "Launching purchase flow for gas.");
-        mHelper.launchPurchaseFlow(this, SKU_GAS, RC_REQUEST, mPurchaseFinishedListener);
+        
+        /* TODO: for security, generate your payload here for verification. See the comments on 
+         *        verifyDeveloperPayload() for more info. Since this is a SAMPLE, we just use 
+         *        an empty string, but on a production app you should carefully generate this. */
+        String payload = ""; 
+        
+        mHelper.launchPurchaseFlow(this, SKU_GAS, RC_REQUEST, 
+                mPurchaseFinishedListener, payload);
     }
 
     // User clicked the "Upgrade to Premium" button.
     public void onUpgradeAppButtonClicked(View arg0) {
         Log.d(TAG, "Upgrade button clicked; launching purchase flow for upgrade.");
         setWaitScreen(true);
-        mHelper.launchPurchaseFlow(this, SKU_PREMIUM, RC_REQUEST, mPurchaseFinishedListener);
-    }
+        
+        /* TODO: for security, generate your payload here for verification. See the comments on 
+         *        verifyDeveloperPayload() for more info. Since this is a SAMPLE, we just use 
+         *        an empty string, but on a production app you should carefully generate this. */
+        String payload = ""; 
 
+        mHelper.launchPurchaseFlow(this, SKU_PREMIUM, RC_REQUEST, 
+                mPurchaseFinishedListener, payload);
+    }
+    
+    // "Subscribe to infinite gas" button clicked. Explain to user, then start purchase
+    // flow for subscription.
+    public void onInfiniteGasButtonClicked(View arg0) {
+        if (!mHelper.subscriptionsSupported()) {
+            complain("Subscriptions not supported on your device yet. Sorry!");
+            return;
+        }
+        
+        /* TODO: for security, generate your payload here for verification. See the comments on 
+         *        verifyDeveloperPayload() for more info. Since this is a SAMPLE, we just use 
+         *        an empty string, but on a production app you should carefully generate this. */
+        String payload = ""; 
+        
+        setWaitScreen(true);
+        Log.d(TAG, "Launching purchase flow for infinite gas subscription.");
+        mHelper.launchPurchaseFlow(this,
+                SKU_INFINITE_GAS, IabHelper.ITEM_TYPE_SUBS, 
+                RC_REQUEST, mPurchaseFinishedListener, payload);        
+    }
+    
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         Log.d(TAG, "onActivityResult(" + requestCode + "," + resultCode + "," + data);
@@ -228,6 +294,36 @@ public class MainActivity extends Activity {
             Log.d(TAG, "onActivityResult handled by IABUtil.");
         }
     }
+    
+    /** Verifies the developer payload of a purchase. */
+    boolean verifyDeveloperPayload(Purchase p) {
+        String payload = p.getDeveloperPayload();
+        
+        /*
+         * TODO: verify that the developer payload of the purchase is correct. It will be
+         * the same one that you sent when initiating the purchase.
+         * 
+         * WARNING: Locally generating a random string when starting a purchase and 
+         * verifying it here might seem like a good approach, but this will fail in the 
+         * case where the user purchases an item on one device and then uses your app on 
+         * a different device, because on the other device you will not have access to the
+         * random string you originally generated.
+         *
+         * So a good developer payload has these characteristics:
+         * 
+         * 1. If two different users purchase an item, the payload is different between them,
+         *    so that one user's purchase can't be replayed to another user.
+         * 
+         * 2. The payload must be such that you can verify it even when the app wasn't the
+         *    one who initiated the purchase flow (so that items purchased by the user on 
+         *    one device work on other devices owned by the user).
+         * 
+         * Using your own server to store and verify developer payloads across app
+         * installations is recommended.
+         */
+        
+        return true;
+    }
 
     // Callback for when a purchase is finished
     IabHelper.OnIabPurchaseFinishedListener mPurchaseFinishedListener = new IabHelper.OnIabPurchaseFinishedListener() {
@@ -241,8 +337,12 @@ public class MainActivity extends Activity {
                     setWaitScreen(false);
                     return;
                 }
-                // Oh noes!
                 complain("Error purchasing: " + result);
+                setWaitScreen(false);
+                return;
+            }
+            if (!verifyDeveloperPayload(purchase)) {
+                complain("Error purchasing. Authenticity verification failed.");
                 setWaitScreen(false);
                 return;
             }
@@ -259,6 +359,15 @@ public class MainActivity extends Activity {
                 Log.d(TAG, "Purchase is premium upgrade. Congratulating user.");
                 alert("Thank you for upgrading to premium!");
                 mIsPremium = true;
+                updateUi();
+                setWaitScreen(false);
+            }
+            else if (purchase.getSku().equals(SKU_INFINITE_GAS)) {
+                // bought the infinite gas subscription
+                Log.d(TAG, "Infinite gas subscription purchased.");
+                alert("Thank you for subscribing to infinite gas!");
+                mSubscribedToInfiniteGas = true;
+                mTank = TANK_MAX;
                 updateUi();
                 setWaitScreen(false);
             }
@@ -293,20 +402,21 @@ public class MainActivity extends Activity {
     // Drive button clicked. Burn gas!
     public void onDriveButtonClicked(View arg0) {
         Log.d(TAG, "Drive button clicked.");
-        if (mTank <= 0) alert("Oh, no! You are out of gas! Try buying some!");
+        if (!mSubscribedToInfiniteGas && mTank <= 0) alert("Oh, no! You are out of gas! Try buying some!");
         else {
-            --mTank;
+            if (!mSubscribedToInfiniteGas) --mTank;
             saveData();
             alert("Vroooom, you drove a few miles.");
             updateUi();
             Log.d(TAG, "Vrooom. Tank is now " + mTank);
         }
     }
-
+    
     // We're being destroyed. It's important to dispose of the helper here!
     @Override
     public void onDestroy() {
         super.onDestroy();
+        
         // very important:
         Log.d(TAG, "Destroying helper.");
         if (mHelper != null) mHelper.dispose();
@@ -321,9 +431,18 @@ public class MainActivity extends Activity {
         // "Upgrade" button is only visible if the user is not premium
         findViewById(R.id.upgrade_button).setVisibility(mIsPremium ? View.GONE : View.VISIBLE);
 
+        // "Get infinite gas" button is only visible if the user is not subscribed yet
+        findViewById(R.id.infinite_gas_button).setVisibility(mSubscribedToInfiniteGas ? 
+                View.GONE : View.VISIBLE);
+
         // update gas gauge to reflect tank status
-        int index = mTank >= TANK_RES_IDS.length ? TANK_RES_IDS.length - 1 : mTank;
-        ((ImageView)findViewById(R.id.gas_gauge)).setImageResource(TANK_RES_IDS[index]);
+        if (mSubscribedToInfiniteGas) {
+            ((ImageView)findViewById(R.id.gas_gauge)).setImageResource(R.drawable.gas_inf);
+        }
+        else {
+            int index = mTank >= TANK_RES_IDS.length ? TANK_RES_IDS.length - 1 : mTank;
+            ((ImageView)findViewById(R.id.gas_gauge)).setImageResource(TANK_RES_IDS[index]);
+        }        
     }
 
     // Enables or disables the "please wait" screen.
@@ -346,6 +465,13 @@ public class MainActivity extends Activity {
     }
 
     void saveData() {
+        
+        /*
+         * WARNING: on a real application, we recommend you save data in a secure way to
+         * prevent tampering. For simplicity in this sample, we simply store the data using a
+         * SharedPreferences.
+         */
+        
         SharedPreferences.Editor spe = getPreferences(MODE_PRIVATE).edit();
         spe.putInt("tank", mTank);
         spe.commit();
