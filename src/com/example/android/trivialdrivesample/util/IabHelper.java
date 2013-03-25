@@ -280,14 +280,18 @@ public class IabHelper {
     public void dispose() {
         logDebug("Disposing.");
         mSetupDone = false;
-        if (mServiceConn != null) {
+        if (mService != null) {
             logDebug("Unbinding from service.");
-            if (mContext != null) mContext.unbindService(mServiceConn);
-            mServiceConn = null;
+            if (mContext != null
+    				&& mServiceConn != null) {
+				mContext.unbindService(mServiceConn);
+			}
             mService = null;
             mPurchaseListener = null;
         }
-    }
+
+		mServiceConn = null;
+	}
     
     /** Returns whether subscriptions are supported. */
     public boolean subscriptionsSupported() {
